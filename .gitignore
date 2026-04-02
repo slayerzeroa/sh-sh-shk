@@ -1,0 +1,6 @@
+.omx/
+__pycache__/
+*.pyc
+*.egg-info/
+tmp*/
+.test-continuity.json
