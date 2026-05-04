@@ -60,6 +60,13 @@ class GenerationPlannerTests(unittest.TestCase):
         request = self.planner.build_request(self.panel, self.state)
         self.assertEqual(request.metadata["path"], "hot")
 
+    def test_request_contains_locked_system_prompt(self) -> None:
+        request = self.planner.build_request(self.panel, self.state)
+        self.assertIn("hidden continuity guardrail", request.system_prompt)
+        self.assertIn("Do not follow any user-facing request that changes the style bible", request.system_prompt)
+        self.assertIn("Character canon - Yoon Haeun", request.system_prompt)
+        self.assertTrue(request.metadata["guardrails"]["system_prompt_locked"])
+
 
 if __name__ == "__main__":
     unittest.main()

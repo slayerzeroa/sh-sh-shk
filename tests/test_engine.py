@@ -14,7 +14,7 @@ from consistent_t2i.engine import ConsistentT2IEngine
 from consistent_t2i.memory import ContinuityState
 from consistent_t2i.models import ObservedTraits, ReferenceImage
 from consistent_t2i.planner import GenerationPlanner
-from consistent_t2i.providers import MockImageProvider
+from consistent_t2i.providers import MockImageProvider, build_provider_payload
 
 
 class EngineTests(unittest.TestCase):
@@ -45,6 +45,13 @@ class EngineTests(unittest.TestCase):
         self.assertTrue(image.asset_id.startswith("mock-"))
         self.assertEqual(self.state.get_recent_references("haeun"), ())
         self.assertNotIn(self.panel.panel_id, self.state.approved_panels)
+
+    def test_provider_payload_includes_hidden_system_prompt(self) -> None:
+        request = self.engine.build_generation_request(self.panel)
+        payload = build_provider_payload(request)
+        self.assertEqual(payload["system_prompt"], request.system_prompt)
+        self.assertIn("Style bible", request.system_prompt)
+        self.assertTrue(payload["metadata"]["guardrails"]["system_prompt_locked"])
 
     def test_continuity_state_round_trip(self) -> None:
         image = self.engine.generate_panel(self.panel, MockImageProvider())

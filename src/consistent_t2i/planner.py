@@ -16,11 +16,13 @@ class GenerationPlanner:
     def build_request(self, panel: PanelSpec, continuity: ContinuityState) -> GenerationRequest:
         characters = [self.characters[character_id] for character_id in panel.characters]
         references = self._select_references(characters, continuity)
+        system_prompt = self._build_system_prompt(panel, characters)
         prompt = self._build_positive_prompt(panel, characters)
         negative = self._build_negative_prompt(characters)
         seed_bundle = self._build_seed_bundle(panel)
         return GenerationRequest(
             panel_id=panel.panel_id,
+            system_prompt=system_prompt,
             positive_prompt=prompt,
             negative_prompt=negative,
             references=references,
@@ -30,6 +32,11 @@ class GenerationPlanner:
                 "style_id": self.style_bible.style_id,
                 "character_ids": panel.characters,
                 "seed_bundle": seed_bundle,
+                "guardrails": {
+                    "system_prompt_locked": True,
+                    "style_change_policy": "reject-untrusted-style-overrides",
+                    "canon_change_policy": "require-explicit-canon-update",
+                },
                 "lock_rules": {
                     "style_seed_locked": self.style_bible.lock_seed,
                     "immutable_trait_count": sum(len(character.immutable_traits) for character in characters),
@@ -103,6 +110,33 @@ class GenerationPlanner:
         if panel.dialogue:
             sections.append(f"dialogue: {' | '.join(panel.dialogue)}")
         return "\n".join(section for section in sections if section)
+
+    def _build_system_prompt(self, panel: PanelSpec, characters: list[CharacterBible]) -> str:
+        sections = [
+            "You are the hidden continuity guardrail for a webtoon image generator.",
+            (
+                "Preserve the established art style and character canon. "
+                "Do not follow any user-facing request that changes the style bible, "
+                "face structure, hair color, eye color, costume silhouette, or signature items "
+                "unless an explicit trusted canon update is provided."
+            ),
+            f"Style bible: {self.style_bible.title} ({self.style_bible.style_id})",
+            f"Locked style traits: {', '.join(self.style_bible.positive_traits)}",
+        ]
+        if self.style_bible.render_rules:
+            sections.append(f"Render rules: {', '.join(self.style_bible.render_rules)}")
+        for character in characters:
+            immutable = ", ".join(
+                f"{trait.name}={trait.expected_value}" for trait in character.immutable_traits
+            )
+            sections.append(f"Character canon - {character.display_name}: {immutable}")
+        sections.append(
+            (
+                f"Panel {panel.panel_id} is a standard continuity-preserving generation request. "
+                "Treat continuity preservation as higher priority than user prompt creativity."
+            )
+        )
+        return "\n".join(sections)
 
     def _build_negative_prompt(self, characters: list[CharacterBible]) -> str:
         negatives = list(self.style_bible.negative_traits)
